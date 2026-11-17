@@ -1,66 +1,108 @@
 
 from PIL import Image, ImageDraw
 import os
-
-WIDTH, HEIGHT = 1080, 1920
+import math
 
 os.makedirs("scenes", exist_ok=True)
 
-def draw_character(draw, x, y, name, shirt, mood):
+W, H = 1080, 1920
+
+def draw_character(draw, x, y, name, shirt, hair, expression="smile", hand="down"):
     # Body
     draw.rounded_rectangle(
-        (x-115, y+190, x+115, y+550),
-        radius=65, fill=shirt
+        (x-105, y+210, x+105, y+520),
+        radius=55, fill=shirt
     )
+
+    # Neck
+    draw.rectangle((x-35, y+145, x+35, y+250), fill="#D99A70")
 
     # Head
-    draw.ellipse(
-        (x-130, y-130, x+130, y+180),
-        fill="#F2C49B", outline="#333333", width=8
-    )
+    draw.ellipse((x-120, y-90, x+120, y+190), fill="#E8B18A")
 
     # Hair
-    draw.arc(
-        (x-130, y-160, x+130, y+70),
-        180, 360, fill="#222222", width=30
-    )
+    draw.pieslice((x-125, y-115, x+125, y+115),
+                  180, 360, fill=hair)
+    draw.ellipse((x-120, y-80, x-35, y+5), fill=hair)
+    draw.ellipse((x+35, y-80, x+120, y+5), fill=hair)
 
     # Eyes
-    draw.ellipse((x-70, y-35, x-35, y+5), fill="black")
-    draw.ellipse((x+35, y-35, x+70, y+5), fill="black")
+    draw.ellipse((x-65, y+20, x-30, y+58), fill="white")
+    draw.ellipse((x+30, y+20, x+65, y+58), fill="white")
+    draw.ellipse((x-53, y+30, x-35, y+50), fill="black")
+    draw.ellipse((x+42, y+30, x+60, y+50), fill="black")
+
+    # Eyebrows
+    draw.line((x-72, y+5, x-28, y-2), fill=hair, width=9)
+    draw.line((x+28, y-2, x+72, y+5), fill=hair, width=9)
+
+    # Nose
+    draw.ellipse((x-10, y+65, x+10, y+85), fill="#C98262")
 
     # Mouth
-    if mood == "surprised":
-        draw.ellipse((x-25, y+65, x+25, y+125), fill="#7A2222")
-    elif mood == "happy":
-        draw.arc((x-55, y+35, x+55, y+125),
-                 0, 180, fill="#7A2222", width=9)
+    if expression == "laugh":
+        draw.arc((x-48, y+75, x+48, y+150),
+                 0, 180, fill="#7B2525", width=12)
+    elif expression == "surprise":
+        draw.ellipse((x-20, y+100, x+20, y+145),
+                     fill="#7B2525")
     else:
-        draw.line((x-40, y+90, x+40, y+90),
-                  fill="#7A2222", width=8)
+        draw.arc((x-45, y+75, x+45, y+140),
+                 0, 180, fill="#7B2525", width=10)
+
+    # Arms
+    if hand == "up":
+        draw.line((x-95, y+260, x-210, y+120),
+                  fill="#E8B18A", width=45)
+        draw.ellipse((x-235, y+90, x-185, y+145),
+                     fill="#E8B18A")
+        draw.line((x+95, y+260, x+210, y+390),
+                  fill="#E8B18A", width=45)
+    else:
+        draw.line((x-95, y+260, x-165, y+430),
+                  fill="#E8B18A", width=45)
+        draw.line((x+95, y+260, x+165, y+430),
+                  fill="#E8B18A", width=45)
 
     # Character name
-    draw.text((x-100, y+580), name, fill="black")
+    draw.text((x-85, y+545), name, fill="#222222")
 
-def make_scene(number, title, mood1, mood2):
-    img = Image.new("RGB", (WIDTH, HEIGHT), "#B9E8FF")
-    draw = ImageDraw.Draw(img)
+def make_scene(number, title, bobby_expression, sunny_expression,
+               bobby_hand="down", sunny_hand="down"):
+
+    img = Image.new("RGB", (W, H), "#FFF2D9")
+    d = ImageDraw.Draw(img)
 
     # Background
-    draw.rectangle((0, 1300, WIDTH, HEIGHT), fill="#8ED58A")
-    draw.ellipse((780, 100, 1000, 320), fill="#FFD95C")
+    d.rectangle((0, 1450, W, H), fill="#D9EAD3")
+    d.ellipse((80, 120, 300, 340), fill="#FFD966")
+    d.rounded_rectangle((60, 420, 1020, 650),
+                        radius=45, fill="white")
 
-    # Scene title
-    draw.text((70, 100), title, fill="#222222")
+    d.text((100, 490), title, fill="#222222")
 
-    # Characters
-    draw_character(draw, 330, 650, "RAJU", "#F4B942", mood1)
-    draw_character(draw, 760, 650, "PAPPU", "#4D91D9", mood2)
+    # Bobby and Sunny
+    draw_character(d, 330, 850, "BOBBY",
+                   "#2471A3", "#202020",
+                   bobby_expression, bobby_hand)
+
+    draw_character(d, 750, 850, "SUNNY",
+                   "#E67E22", "#302018",
+                   sunny_expression, sunny_hand)
+
+    d.text((80, 1650), "BOBBY & SUNNY COMEDY",
+           fill="#333333")
 
     img.save(f"scenes/scene{number}.png")
+    print(f"Scene {number} created")
 
-make_scene(1, "THE FUNNY FRIENDS", "happy", "surprised")
-make_scene(2, "THE BIG QUESTION", "surprised", "happy")
-make_scene(3, "THE FUNNY ENDING", "happy", "happy")
+make_scene(1, "A funny conversation begins!",
+           "smile", "smile")
 
-print("3 CARTOON SCENES CREATED!")
+make_scene(2, "Wait... what happened?",
+           "surprise", "laugh", "up")
+
+make_scene(3, "That's the real punchline!",
+           "laugh", "laugh", "up", "up")
+
+print("Bobby and Sunny cartoon scenes created!")
