@@ -1,6 +1,7 @@
 
 import random
 import json
+import os
 from datetime import datetime
 
 JOKES = [
@@ -31,7 +32,18 @@ def generate_joke():
         "ending": joke["ending"]
     }
 
+    os.makedirs("generated", exist_ok=True)
+
+    filename = datetime.now().strftime(
+        "generated/joke_%Y%m%d_%H%M%S.json"
+    )
+
+    with open(filename, "w", encoding="utf-8") as file:
+        json.dump(result, file, ensure_ascii=False, indent=4)
+
+    print("JOKE GENERATED SUCCESSFULLY!")
     print(json.dumps(result, ensure_ascii=False, indent=4))
+    print("Saved to:", filename)
 
 if __name__ == "__main__":
     generate_joke()
