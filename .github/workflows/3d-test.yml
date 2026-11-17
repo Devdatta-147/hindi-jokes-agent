@@ -1,0 +1,42 @@
+
+name: Bobby and Sunny 3D Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-3d:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Get project files
+        uses: actions/checkout@v4
+
+      - name: Download Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget xz-utils
+          wget https://download.blender.org/release/Blender4.2/blender-4.2.3-linux-x64.tar.xz
+          tar -xf blender-4.2.3-linux-x64.tar.xz
+
+      - name: Check character files
+        run: |
+          ls -lh Bobby.fbx Sunny.fbx render_3d.py
+
+      - name: Render 3D video
+        run: |
+          ./blender-4.2.3-linux-x64/blender \
+            --background \
+            --python render_3d.py
+
+      - name: Upload 3D video
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bobby-Sunny-3D-Test
+          path: video/3d_test.mp4
+          if-no-files-found: error
+          retention-days: 7
