@@ -39,6 +39,17 @@ jobs:
         run: |
           python -c "import whisperx; print('WhisperX installed successfully')"
 
+      - name: Test Hindi alignment model
+        run: |
+          python - <<'PY'
+          import whisperx
+          model, metadata = whisperx.load_align_model(
+              language_code="hi",
+              device="cpu"
+          )
+          print("Hindi alignment model loaded successfully")
+          PY   
+
       - name: Generate Hindi joke
         run: python agent.py
 
