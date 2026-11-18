@@ -110,6 +110,29 @@ if not dialogue:
     raise ValueError("Dialogue timing file is empty.")
 
 
+# Load WhisperX word timings
+word_timings = []
+
+word_file = "audio/word_timing.json"
+
+if os.path.exists(word_file):
+    try:
+        with open(word_file, "r", encoding="utf-8") as f:
+            word_timings = json.load(f)
+
+        if not isinstance(word_timings, list):
+            word_timings = []
+
+    except (json.JSONDecodeError, OSError) as e:
+        print("Could not read word timings:", e)
+        word_timings = []
+
+if word_timings:
+    print(f"Loaded {len(word_timings)} WhisperX word timings.")
+else:
+    print("No word timings found. Using line-level animation fallback.")
+
+
 duration = get_audio_duration()
 
 if duration <= 0:
@@ -146,9 +169,31 @@ def active_line(time):
     return None
 
 
+def active_word(time, character_name):
+    """
+    Return the active WhisperX word for this character.
+    """
+
+    for word in word_timings:
+        if word.get("speaker") != character_name:
+            continue
+
+        start = word.get("start")
+        end = word.get("end")
+
+        if start is None or end is None:
+            continue
+
+        if start <= time < end:
+            return word
+
+    return None
+
 
 def draw_character(scene, name, time, speaker):
     layers = scaled_characters[name]
+
+    # Is this character the current dialogue speaker?
     speaking = speaker == name
 
     # Different movement personalities
@@ -181,7 +226,7 @@ def draw_character(scene, name, time, speaker):
         center=(215, 170)
     )
 
-    # Identify the current dialogue line
+    # Current dialogue line
     line = active_line(time)
     elapsed = 0
     progress = 0
@@ -191,7 +236,17 @@ def draw_character(scene, name, time, speaker):
         line_duration = max(0.1, line["end"] - line["start"])
         progress = min(1.0, elapsed / line_duration)
 
-    # Natural blinking, with different timing for each character
+    # Find this character's active spoken word
+    word = active_word(time, name) if word_timings else None
+
+    # If word timings exist, use them.
+    # Otherwise, retain the previous line-level animation.
+    if word_timings:
+        word_speaking = word is not None
+    else:
+        word_speaking = speaking
+
+    # Natural blinking
     blink = ((time + phase) % 3.8) < 0.13
 
     # Listener reaction
@@ -214,6 +269,7 @@ def draw_character(scene, name, time, speaker):
             mouth = "mouth_closed"
 
     elif speaking:
+
         if name == "Bobby":
             # Bobby: energetic and playful
             if 0.25 < progress < 0.42:
@@ -221,10 +277,22 @@ def draw_character(scene, name, time, speaker):
             elif 0.55 < progress < 0.72:
                 eyes = "eyes_narrow"
 
-            if progress > 0.78:
-                mouth = "mouth_laugh"
-            elif int(time * 7) % 2 == 0:
-                mouth = "mouth_open"
+            if word_speaking:
+                if word_timings:
+                    word_start = word["start"]
+                    word_phase = time - word_start
+
+                    if int(word_phase * 8) % 2 == 0:
+                        mouth = "mouth_open"
+                    else:
+                        mouth = "mouth_closed"
+                else:
+                    if progress > 0.78:
+                        mouth = "mouth_laugh"
+                    elif int(time * 7) % 2 == 0:
+                        mouth = "mouth_open"
+                    else:
+                        mouth = "mouth_closed"
             else:
                 mouth = "mouth_closed"
 
@@ -235,10 +303,22 @@ def draw_character(scene, name, time, speaker):
             elif 0.72 < progress < 0.88:
                 eyes = "eyes_worried"
 
-            if progress > 0.82:
-                mouth = "mouth_smile"
-            elif int(time * 5) % 2 == 0:
-                mouth = "mouth_open"
+            if word_speaking:
+                if word_timings:
+                    word_start = word["start"]
+                    word_phase = time - word_start
+
+                    if int(word_phase * 6) % 2 == 0:
+                        mouth = "mouth_open"
+                    else:
+                        mouth = "mouth_closed"
+                else:
+                    if progress > 0.82:
+                        mouth = "mouth_smile"
+                    elif int(time * 5) % 2 == 0:
+                        mouth = "mouth_open"
+                    else:
+                        mouth = "mouth_closed"
             else:
                 mouth = "mouth_closed"
 
@@ -255,7 +335,7 @@ def draw_character(scene, name, time, speaker):
     if blink:
         eyes = "eyes_closed"
 
-    # Different hand gesture frequency
+    # Hand gestures
     if name == "Bobby":
         gesture = speaking and ((time + phase) % 3.5 < 1.0)
     else:
