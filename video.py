@@ -227,8 +227,8 @@ run_command([
     "-i", "audio/joke.mp3",
     "-vf",
     "subtitles=audio/subtitles.srt:"
-    "force_style='FontSize=18,Outline=2,Shadow=1,"
-    "Alignment=2,MarginV=100'",
+    "force_style='FontSize=12,Outline=2,Shadow=1,"
+    "Alignment=2,MarginV=35'",
     "-map", "0:v:0",
     "-map", "1:a:0",
     "-c:v", "libx264",
