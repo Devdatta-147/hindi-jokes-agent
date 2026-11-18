@@ -40,6 +40,9 @@ jobs:
       - name: Generate cartoon scenes
         run: python cartoon.py
 
+      - name: Generate character assets
+        run: python characters.py
+
       - name: Generate Hindi voice and subtitles
         run: python voice.py
 
@@ -53,6 +56,7 @@ jobs:
           path: |
             video/
             scenes/
+            characters/
           retention-days: 7
 
       - name: Save generated jokes
