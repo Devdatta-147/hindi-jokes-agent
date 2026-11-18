@@ -22,12 +22,10 @@ jobs:
         with:
           python-version: '3.10'
 
-      
       - name: Install FFmpeg and Hindi fonts
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-noto-core
-
 
       - name: Install dependencies
         run: |
@@ -40,15 +38,7 @@ jobs:
           python -c "import whisperx; print('WhisperX installed successfully')"
 
       - name: Test Hindi alignment model
-        run: |
-          python - <<'PY'
-          import whisperx
-          model, metadata = whisperx.load_align_model(
-              language_code="hi",
-              device="cpu"
-          )
-          print("Hindi alignment model loaded successfully")
-          PY   
+        run: python -c "import whisperx; model, metadata = whisperx.load_align_model(language_code='hi', device='cpu'); print('Hindi alignment model loaded successfully')"
 
       - name: Generate Hindi joke
         run: python agent.py
