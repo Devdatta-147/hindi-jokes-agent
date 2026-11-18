@@ -90,7 +90,7 @@ scene = bpy.context.scene
 scene.render.engine = "BLENDER_EEVEE_NEXT"
 scene.render.resolution_x = 720
 scene.render.resolution_y = 1280
-scene.render.resolution_percentage = 100
+scene.render.resolution_percentage = 50
 scene.render.fps = 24
 
 # Background
@@ -135,11 +135,7 @@ add_light("Main Light", (0, -4, 7), 1500, 5)
 add_light("Fill Light", (4, 2, 5), 900, 4)
 
 # Use the imported animations to set video duration
-end_frame = 120
-for rig in (bobby, sunny):
-    if rig.animation_data and rig.animation_data.action:
-        action = rig.animation_data.action
-        end_frame = max(end_frame, int(action.frame_range[1]))
+end_frame = 48
 
 scene.frame_start = 1
 scene.frame_end = end_frame
