@@ -268,6 +268,7 @@ for frame_number in range(total_frames):
         current_time,
         speaker
     )
+    scene = apply_camera(scene, current_time, line)
 
     frame_path = f"video/frames/frame_{frame_number:05d}.jpg"
 
