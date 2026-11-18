@@ -146,19 +146,20 @@ def active_line(time):
     return None
 
 
+
 def draw_character(scene, name, time, speaker):
     layers = scaled_characters[name]
-
     speaking = speaker == name
 
-    # Gentle body movement
+    # Different movement personalities
     phase = 0 if name == "Bobby" else 1.5
-    bob = int(6 * math.sin(time * 3 + phase))
+    bob_amount = 7 if name == "Bobby" else 4
+    bob = int(bob_amount * math.sin(time * 3 + phase))
 
     x, y = positions[name]
     y += bob
 
-    # Gentle head tilt
+    # Gentle head movement
     tilt_phase = (time + phase) % 7
 
     if tilt_phase < 2:
@@ -180,60 +181,89 @@ def draw_character(scene, name, time, speaker):
         center=(215, 170)
     )
 
-    # Eye blinking
-    blink = (time % 3.7) < 0.14
+    # Identify the current dialogue line
+    line = active_line(time)
+    elapsed = 0
+    progress = 0
 
-    # Short surprised reaction when the other character starts speaking
-    reaction = False
+    if line is not None:
+        elapsed = time - line["start"]
+        line_duration = max(0.1, line["end"] - line["start"])
+        progress = min(1.0, elapsed / line_duration)
 
-    if speaker is not None and speaker != name:
-        for line in dialogue:
-            if line["speaker"] == speaker:
-                if (
-                    line["start"] <= time
-                    and time - line["start"] < 0.45
-                ):
-                    reaction = True
-                    break
+    # Natural blinking, with different timing for each character
+    blink = ((time + phase) % 3.8) < 0.13
 
-    if blink:
-        eyes = "eyes_closed"
-    elif reaction:
-        eyes = "eyes_surprised"
-    elif speaking and (time % 8) > 6.5:
-        eyes = "eyes_surprised"
-    elif speaking and (time % 11) > 8.5:
-        eyes = "eyes_narrow"
-    else:
-        eyes = "eyes_normal"
+    # Listener reaction
+    reaction = (
+        not speaking
+        and line is not None
+        and elapsed < 0.55
+    )
 
-    # Mouth movement
+    # Default expressions
+    eyes = "eyes_normal"
+    mouth = "mouth_smile"
+
     if reaction:
-        mouth = "mouth_surprise"
+        if name == "Bobby":
+            eyes = "eyes_surprised"
+            mouth = "mouth_surprise"
+        else:
+            eyes = "eyes_narrow"
+            mouth = "mouth_closed"
 
     elif speaking:
-        mouth_phase = int(time * 7) % 2 == 0
+        if name == "Bobby":
+            # Bobby: energetic and playful
+            if 0.25 < progress < 0.42:
+                eyes = "eyes_surprised"
+            elif 0.55 < progress < 0.72:
+                eyes = "eyes_narrow"
 
-        if (time % 9) > 7.5:
-            mouth = "mouth_laugh"
+            if progress > 0.78:
+                mouth = "mouth_laugh"
+            elif int(time * 7) % 2 == 0:
+                mouth = "mouth_open"
+            else:
+                mouth = "mouth_closed"
+
         else:
-            mouth = (
-                "mouth_open"
-                if mouth_phase
-                else "mouth_closed"
-            )
-    else:
-        mouth = "mouth_smile"
+            # Sunny: calm and sarcastic
+            if 0.20 < progress < 0.68:
+                eyes = "eyes_narrow"
+            elif 0.72 < progress < 0.88:
+                eyes = "eyes_worried"
 
-    # Hand gestures
-    gesture = (
-        speaking
-        and ((time + phase) % 4.5 < 1.0)
-    )
+            if progress > 0.82:
+                mouth = "mouth_smile"
+            elif int(time * 5) % 2 == 0:
+                mouth = "mouth_open"
+            else:
+                mouth = "mouth_closed"
+
+    else:
+        # Listening expressions
+        if name == "Sunny":
+            eyes = "eyes_narrow"
+            mouth = "mouth_smile"
+        else:
+            eyes = "eyes_normal"
+            mouth = "mouth_smile"
+
+    # Blinking overrides eye expression
+    if blink:
+        eyes = "eyes_closed"
+
+    # Different hand gesture frequency
+    if name == "Bobby":
+        gesture = speaking and ((time + phase) % 3.5 < 1.0)
+    else:
+        gesture = speaking and ((time + phase) % 5.0 < 0.7)
 
     arms = "arms_up" if gesture else "arms_down"
 
-    # Compose character layers
+    # Compose character
     layer_order = [
         layers["body"],
         layers[arms],
