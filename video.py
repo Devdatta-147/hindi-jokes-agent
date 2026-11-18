@@ -73,6 +73,24 @@ def load_character(name):
             Image.open(path).convert("RGBA")
         )
 
+    # Load additional poses when available
+    optional_poses = [
+        "arms_point.png",
+        "arms_hips.png",
+        "arms_laugh.png",
+        "arms_folded.png",
+        "arms_one_hand.png",
+        "arms_facepalm.png"
+    ]
+
+    for filename in optional_poses:
+        path = os.path.join(folder, filename)
+
+        if os.path.exists(path):
+            layers[filename.replace(".png", "")] = (
+                Image.open(path).convert("RGBA")
+            )
+
     return layers
 
 
@@ -170,10 +188,6 @@ def active_line(time):
 
 
 def active_word(time, character_name):
-    """
-    Return the active WhisperX word for this character.
-    """
-
     for word in word_timings:
         if word.get("speaker") != character_name:
             continue
@@ -238,7 +252,6 @@ def draw_character(scene, name, time, speaker):
     # Find this character's active word
     word = active_word(time, name) if word_timings else None
 
-    # Word-level speaking detection
     if word_timings:
         word_speaking = word is not None
     else:
@@ -247,7 +260,7 @@ def draw_character(scene, name, time, speaker):
     # Natural blinking
     blink = ((time + phase) % 3.8) < 0.13
 
-    # Listener reaction at the beginning of a dialogue line
+    # Listener reaction
     reaction = (
         not speaking
         and line is not None
@@ -263,7 +276,6 @@ def draw_character(scene, name, time, speaker):
         else:
             eyes = "eyes_narrow"
 
-        # Listener mouth stays closed
         mouth = "mouth_closed"
 
     elif speaking and word_speaking:
@@ -282,7 +294,6 @@ def draw_character(scene, name, time, speaker):
                 time - word_start
             ) / word_duration
 
-            # Character-specific mouth speed
             if name == "Bobby":
                 mouth_speed = 10
                 open_ratio = 0.58
@@ -290,7 +301,6 @@ def draw_character(scene, name, time, speaker):
                 mouth_speed = 7
                 open_ratio = 0.48
 
-            # Open and close during the active word
             cycle = (word_phase * mouth_speed) % 1.0
 
             if cycle < open_ratio:
@@ -338,18 +348,64 @@ def draw_character(scene, name, time, speaker):
     if blink:
         eyes = "eyes_closed"
 
-    # Hand gestures
-    if name == "Bobby":
-        gesture = speaking and ((time + phase) % 3.5 < 1.0)
-    else:
-        gesture = speaking and ((time + phase) % 5.0 < 0.7)
+    # --------------------------------
+    # NEW: DYNAMIC ARM POSE SELECTION
+    # --------------------------------
 
-    arms = "arms_up" if gesture else "arms_down"
+    arm_pose = "down"
+
+    if speaking:
+
+        if name == "Bobby":
+            # Bobby points while explaining
+            if 0.18 < progress < 0.50:
+                arm_pose = "point"
+
+            # Bobby raises both arms near the punchline
+            elif progress > 0.78:
+                arm_pose = "laugh"
+
+            # Occasional energetic gesture
+            elif (time + phase) % 3.5 < 1.0:
+                arm_pose = "up"
+
+        else:
+            # Sunny uses one hand while explaining
+            if 0.18 < progress < 0.72:
+                arm_pose = "one_hand"
+
+            # Occasional raised-arm gesture
+            elif (time + phase) % 5.0 < 0.7:
+                arm_pose = "up"
+
+    else:
+
+        if name == "Sunny" and speaker == "Bobby":
+            # Sunny facepalms near Bobby's punchline
+            if progress > 0.72:
+                arm_pose = "facepalm"
+            else:
+                arm_pose = "folded"
+
+        elif name == "Bobby" and speaker == "Sunny":
+            # Bobby sometimes listens with hands on hips
+            if progress > 0.55:
+                arm_pose = "hips"
+
+    # Use the requested pose if available
+    requested_layer = f"arms_{arm_pose}"
+
+    if requested_layer in layers:
+        arms = layers[requested_layer]
+    else:
+        # Safe fallback
+        fallback = "arms_up" if arm_pose != "down" else "arms_down"
+        arms = layers[fallback]
 
     # Compose character
     layer_order = [
         layers["body"],
-        layers[arms],
+        arms,
         head,
         hair,
         layers[eyes],
