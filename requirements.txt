@@ -2,3 +2,4 @@
 Pillow
 gTTS
 edge-tts
+whisperx
