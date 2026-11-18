@@ -10,6 +10,9 @@ WIDTH = 1080
 HEIGHT = 1920
 FPS = 15
 
+CHARACTER_WIDTH = 430
+CHARACTER_HEIGHT = 680
+
 os.makedirs("video/frames", exist_ok=True)
 os.makedirs("video", exist_ok=True)
 
@@ -62,7 +65,8 @@ def load_character(name):
 
         if not os.path.exists(path):
             raise FileNotFoundError(
-                f"Missing character layer: {path}"
+                f"Missing character layer: {path}. "
+                "Please run characters.py first."
             )
 
         layers[filename.replace(".png", "")] = (
@@ -77,6 +81,8 @@ characters = {
     "Sunny": load_character("sunny")
 }
 
+
+# Load backgrounds
 backgrounds = []
 
 for number in range(1, 4):
@@ -92,18 +98,27 @@ for number in range(1, 4):
     )
 
 
-with open("audio/dialogue_timing.json", "r", encoding="utf-8") as f:
+# Load dialogue timing
+with open(
+    "audio/dialogue_timing.json",
+    "r",
+    encoding="utf-8"
+) as f:
     dialogue = json.load(f)
 
 if not dialogue:
     raise ValueError("Dialogue timing file is empty.")
 
+
 duration = get_audio_duration()
+
+if duration <= 0:
+    raise ValueError("Audio duration is invalid.")
+
 total_frames = math.ceil(duration * FPS)
 
-CHARACTER_WIDTH = 430
-CHARACTER_HEIGHT = 680
 
+# Resize character layers
 scaled_characters = {}
 
 for name, layers in characters.items():
@@ -116,6 +131,7 @@ for name, layers in characters.items():
         )
 
 
+# Character positions
 positions = {
     "Bobby": (85, 850),
     "Sunny": (565, 850)
@@ -124,7 +140,7 @@ positions = {
 
 def active_line(time):
     for line in dialogue:
-        if line["start"] <= time <= line["end"]:
+        if line["start"] <= time < line["end"]:
             return line
 
     return None
@@ -134,7 +150,6 @@ def draw_character(scene, name, time, speaker):
     layers = scaled_characters[name]
 
     speaking = speaker == name
-    listening = speaker is not None and not speaking
 
     # Gentle body movement
     phase = 0 if name == "Bobby" else 1.5
@@ -143,7 +158,7 @@ def draw_character(scene, name, time, speaker):
     x, y = positions[name]
     y += bob
 
-    # Natural head tilt
+    # Gentle head tilt
     tilt_phase = (time + phase) % 7
 
     if tilt_phase < 2:
@@ -165,53 +180,60 @@ def draw_character(scene, name, time, speaker):
         center=(215, 170)
     )
 
-    # Natural blinking
+    # Eye blinking
     blink = (time % 3.7) < 0.14
 
-    # Facial expressions
+    # Short surprised reaction when the other character starts speaking
     reaction = False
 
-    for line in dialogue:
-        if line["start"] <= time <= line["end"]:
-            if line["speaker"] != name:
-                reaction = (time - line["start"]) < 0.45
-            break
+    if speaker is not None and speaker != name:
+        for line in dialogue:
+            if line["speaker"] == speaker:
+                if (
+                    line["start"] <= time
+                    and time - line["start"] < 0.45
+                ):
+                    reaction = True
+                    break
 
     if blink:
         eyes = "eyes_closed"
-
     elif reaction:
         eyes = "eyes_surprised"
-
     elif speaking and (time % 8) > 6.5:
         eyes = "eyes_surprised"
-
     elif speaking and (time % 11) > 8.5:
         eyes = "eyes_narrow"
-
     else:
         eyes = "eyes_normal"
 
-    # Mouth animation
+    # Mouth movement
     if reaction:
         mouth = "mouth_surprise"
 
     elif speaking:
-        mouth_phase = (int(time * 7) % 2 == 0)
+        mouth_phase = int(time * 7) % 2 == 0
 
         if (time % 9) > 7.5:
             mouth = "mouth_laugh"
         else:
-            mouth = "mouth_open" if mouth_phase else "mouth_closed"
-
+            mouth = (
+                "mouth_open"
+                if mouth_phase
+                else "mouth_closed"
+            )
     else:
         mouth = "mouth_smile"
 
     # Hand gestures
-    gesture = speaking and ((time + phase) % 4.5 < 1.0)
+    gesture = (
+        speaking
+        and ((time + phase) % 4.5 < 1.0)
+    )
+
     arms = "arms_up" if gesture else "arms_down"
 
-    # Compose transparent layers
+    # Compose character layers
     layer_order = [
         layers["body"],
         layers[arms],
@@ -236,76 +258,62 @@ def draw_character(scene, name, time, speaker):
     scene.alpha_composite(character_image, (x, y))
 
 
-print("Creating animated cartoon frames...")
-
-# Remove old frames so they don't enter the new video
-for old_frame in glob.glob("video/frames/frame_*.jpg"):
-    os.remove(old_frame)
-
-for frame_number in range(total_frames):
-    current_time = frame_number / FPS
-
-    scene_index = min(
-        int((current_time / duration) * 3),
-        2
-    )
-
-    scene = backgrounds[scene_index].copy()
-
-    line = active_line(current_time)
-    speaker = line["speaker"] if line else None
-
-    draw_character(
-        scene,
-        "Bobby",
-        current_time,
-        speaker
-    )
-
-    draw_character(
-        scene,
-        "Sunny",
-        current_time,
-        speaker
-    )
-    scene = apply_camera(scene, current_time, line)
-
-    frame_path = f"video/frames/frame_{frame_number:05d}.jpg"
-
-    scene.convert("RGB").save(
-        frame_path,
-        quality=90
-    )
-    
 def apply_camera(scene, time, line):
     if line is None:
         return scene
 
-    speaker = line["speaker"]
+    speaker = line.get("speaker")
+
+    if speaker not in positions:
+        return scene
+
     elapsed = max(0, time - line["start"])
-    line_duration = max(0.1, line["end"] - line["start"])
+    line_duration = max(
+        0.1,
+        line["end"] - line["start"]
+    )
+
     progress = min(1.0, elapsed / line_duration)
 
-    # Brief reaction shot at the beginning of dialogue
+    # Briefly show the listener's reaction
     if elapsed < 0.35:
         focus = "Sunny" if speaker == "Bobby" else "Bobby"
-        zoom = 1.12
+        zoom = 1.10
+
     else:
         focus = speaker
 
-        # Smooth zoom towards the punchline
-        zoom = 1.0 + 0.12 * math.sin(math.pi * progress)
+        # Gradual zoom towards the punchline
+        zoom = 1.0 + 0.10 * math.sin(
+            math.pi * progress
+        )
 
-    center_x = positions[focus][0] + CHARACTER_WIDTH // 2
-    center_y = positions[focus][1] + CHARACTER_HEIGHT // 2
+    center_x = (
+        positions[focus][0] + CHARACTER_WIDTH // 2
+    )
+
+    center_y = (
+        positions[focus][1] + CHARACTER_HEIGHT // 2
+    )
 
     crop_width = int(WIDTH / zoom)
     crop_height = int(HEIGHT / zoom)
 
-    left = max(0, min(WIDTH - crop_width,
-                      center_x - crop_width // 2))
-    top = max(0, min(HEIGHT - crop_height,
-                     center_y - crop_height // 2))
+    left = max(
+        0,
+        min(
+            WIDTH - crop_width,
+            center_x - crop_width // 2
+        )
+    )
+
+    top = max(
+        0,
+        min(
+            HEIGHT - crop_height,
+            center_y - crop_height // 2
+        )
+    )
 
     cropped = scene.crop((
         left,
@@ -320,8 +328,70 @@ def apply_camera(scene, time, line):
     )
 
 
+print("Preparing cartoon video...")
+
+# Remove old frames
+for old_frame in glob.glob("video/frames/frame_*.jpg"):
+    os.remove(old_frame)
+
+
+print("Creating animated cartoon frames...")
+
+for frame_number in range(total_frames):
+
+    current_time = frame_number / FPS
+
+    # Three background scenes
+    scene_index = min(
+        int((current_time / duration) * 3),
+        2
+    )
+
+    scene = backgrounds[scene_index].copy()
+
+    line = active_line(current_time)
+
+    speaker = (
+        line.get("speaker")
+        if line is not None
+        else None
+    )
+
+    # Draw Bobby and Sunny
+    draw_character(
+        scene,
+        "Bobby",
+        current_time,
+        speaker
+    )
+
+    draw_character(
+        scene,
+        "Sunny",
+        current_time,
+        speaker
+    )
+
+    # Apply camera movement
+    scene = apply_camera(
+        scene,
+        current_time,
+        line
+    )
+
+    frame_path = (
+        f"video/frames/frame_{frame_number:05d}.jpg"
+    )
+
+    scene.convert("RGB").save(
+        frame_path,
+        quality=90
+    )
+
 print("Frames created. Building final video...")
 
+
+# Create silent video
 run_command([
     "ffmpeg", "-y",
     "-framerate", str(FPS),
@@ -332,7 +402,8 @@ run_command([
     "video/silent.mp4"
 ])
 
-# Add Hindi audio and preserve approved subtitle settings
+
+# Add Hindi voice and subtitles
 run_command([
     "ffmpeg", "-y",
     "-i", "video/silent.mp4",
@@ -351,5 +422,6 @@ run_command([
     "-pix_fmt", "yuv420p",
     "video/first_cartoon.mp4"
 ])
+
 
 print("SUCCESS! Animated Hindi cartoon video created.")
