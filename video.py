@@ -262,12 +262,12 @@ def draw_character(scene, name, time, speaker):
 
     if reaction:
         if name == "Bobby":
-            eyes = "eyes_surprised"
-            mouth = "mouth_surprise"
+           eyes = "eyes_surprised"
         else:
-            eyes = "eyes_narrow"
-            mouth = "mouth_closed"
+           eyes = "eyes_narrow"
 
+        mouth = "mouth_closed"
+    
     elif speaking:
 
         if name == "Bobby":
