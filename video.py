@@ -1,20 +1,20 @@
 
 import os
 import json
-import subprocess
+import glob
 import math
-from PIL import Image, ImageDraw
+import subprocess
+from PIL import Image
 
-WIDTH, HEIGHT = 1080, 1920
+WIDTH = 1080
+HEIGHT = 1920
 FPS = 15
-FRAMES_DIR = "frames"
-SCENES_DIR = "scenes"
-AUDIO_FILE = "audio/joke.mp3"
-SUBTITLE_FILE = "audio/subtitles.srt"
-OUTPUT_FILE = "video/first_cartoon.mp4"
+
+os.makedirs("video/frames", exist_ok=True)
+os.makedirs("video", exist_ok=True)
 
 
-def run(command):
+def run_command(command):
     subprocess.run(command, check=True)
 
 
@@ -24,97 +24,220 @@ def get_audio_duration():
             "ffprobe", "-v", "error",
             "-show_entries", "format=duration",
             "-of", "default=noprint_wrappers=1:nokey=1",
-            AUDIO_FILE
+            "audio/joke.mp3"
         ],
-        capture_output=True, text=True, check=True
+        capture_output=True,
+        text=True,
+        check=True
     )
     return float(result.stdout.strip())
 
 
-def create_moving_frame(scene, frame_number, total_frames):
-    image = scene.copy().convert("RGB")
-    draw = ImageDraw.Draw(image)
+def load_character(name):
+    folder = f"characters/{name}"
 
-    progress = frame_number / max(total_frames, 1)
-
-    # Gentle camera movement
-    bob = int(5 * math.sin(progress * math.pi * 8))
-
-    # Add a small moving highlight to make the scene feel lively
-    sun_x = int(900 + 12 * math.sin(progress * math.pi * 6))
-    draw.ellipse(
-        (sun_x - 8, 175 - 8, sun_x + 8, 175 + 8),
-        fill=(255, 235, 120)
-    )
-
-    # Subtle vertical movement
-    shifted = Image.new("RGB", (WIDTH, HEIGHT), (255, 255, 255))
-    shifted.paste(image, (0, bob))
-    return shifted
-
-
-def main():
-    for folder in ["video", FRAMES_DIR]:
-        os.makedirs(folder, exist_ok=True)
-
-    if not os.path.exists(AUDIO_FILE):
-        raise FileNotFoundError("Hindi audio not found: " + AUDIO_FILE)
-
-    if not os.path.exists(SUBTITLE_FILE):
-        raise FileNotFoundError("Subtitles not found: " + SUBTITLE_FILE)
-
-    scene_paths = [
-        os.path.join(SCENES_DIR, "scene1.png"),
-        os.path.join(SCENES_DIR, "scene2.png"),
-        os.path.join(SCENES_DIR, "scene3.png")
+    required = [
+        "body.png",
+        "head.png",
+        "hair.png",
+        "eyes_open.png",
+        "eyes_closed.png",
+        "mouth_closed.png",
+        "mouth_open.png",
+        "mouth_smile.png",
+        "mouth_surprise.png",
+        "arms_down.png",
+        "arms_up.png"
     ]
 
-    for path in scene_paths:
+    layers = {}
+
+    for filename in required:
+        path = os.path.join(folder, filename)
+
         if not os.path.exists(path):
-            raise FileNotFoundError("Cartoon scene not found: " + path)
-
-    duration = get_audio_duration()
-    total_frames = max(1, int(duration * FPS))
-    frames_per_scene = max(1, total_frames // len(scene_paths))
-
-    frame_number = 0
-
-    for scene_index, path in enumerate(scene_paths):
-        scene = Image.open(path).convert("RGB").resize((WIDTH, HEIGHT))
-
-        if scene_index == len(scene_paths) - 1:
-            scene_frames = total_frames - frame_number
-        else:
-            scene_frames = frames_per_scene
-
-        for local_frame in range(scene_frames):
-            frame = create_moving_frame(
-                scene, local_frame, scene_frames
+            raise FileNotFoundError(
+                f"Missing character layer: {path}"
             )
-            frame.save(
-                os.path.join(FRAMES_DIR, f"frame_{frame_number:06d}.jpg"),
-                quality=90
-            )
-            frame_number += 1
 
-    run([
-        "ffmpeg", "-y",
-        "-framerate", str(FPS),
-        "-i", os.path.join(FRAMES_DIR, "frame_%06d.jpg"),
-        "-i", AUDIO_FILE,
-        "-vf",
-        "subtitles=" + SUBTITLE_FILE +
-        ":force_style='FontName=DejaVu Sans,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=100'",
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac",
-        "-shortest",
-        "-movflags", "+faststart",
-        OUTPUT_FILE
-    ])
+        layers[filename.replace(".png", "")] = (
+            Image.open(path).convert("RGBA")
+        )
 
-    print("Cartoon video created:", OUTPUT_FILE)
+    return layers
 
 
-if __name__ == "__main__":
-    main()
+characters = {
+    "Bobby": load_character("bobby"),
+    "Sunny": load_character("sunny")
+}
+
+backgrounds = []
+
+for number in range(1, 4):
+    path = f"scenes/scene{number}.png"
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Missing background: {path}")
+
+    backgrounds.append(
+        Image.open(path).convert("RGBA").resize((WIDTH, HEIGHT))
+    )
+
+with open("audio/dialogue_timing.json", "r", encoding="utf-8") as f:
+    dialogue = json.load(f)
+
+if not dialogue:
+    raise ValueError("Dialogue timing file is empty.")
+
+duration = get_audio_duration()
+total_frames = math.ceil(duration * FPS)
+
+# Resize character layers while keeping them transparent
+CHARACTER_WIDTH = 430
+CHARACTER_HEIGHT = 680
+
+scaled_characters = {}
+
+for name, layers in characters.items():
+    scaled_characters[name] = {}
+
+    for layer_name, layer in layers.items():
+        scaled_characters[name][layer_name] = layer.resize(
+            (CHARACTER_WIDTH, CHARACTER_HEIGHT),
+            Image.Resampling.LANCZOS
+        )
+
+# Character positions on the screen
+positions = {
+    "Bobby": (85, 850),
+    "Sunny": (565, 850)
+}
+
+
+def active_speaker(time):
+    for line in dialogue:
+        if line["start"] <= time <= line["end"]:
+            return line["speaker"]
+
+    return None
+
+
+def draw_character(scene, name, time, speaking):
+    layers = scaled_characters[name]
+
+    # Gentle body movement
+    bob = int(5 * math.sin(time * 3 + (0 if name == "Bobby" else 1)))
+
+    x, y = positions[name]
+    y += bob
+
+    # Blink briefly at regular intervals
+    blink = (time % 3.7) < 0.14
+
+    if speaking:
+        # Mouth opens and closes while this character speaks
+        mouth_is_open = (int(time * 7) % 2 == 0)
+        mouth = "mouth_open" if mouth_is_open else "mouth_closed"
+    else:
+        mouth = "mouth_smile"
+
+    # Occasional hand gesture while speaking
+    gesture = speaking and (int(time * 1.5) % 3 == 0)
+    arms = "arms_up" if gesture else "arms_down"
+
+    # Compose transparent layers in order
+    layer_order = [
+        "body",
+        arms,
+        "head",
+        "hair",
+        "eyes_closed" if blink else "eyes_open",
+        mouth
+    ]
+
+    character_image = Image.new(
+        "RGBA",
+        (CHARACTER_WIDTH, CHARACTER_HEIGHT),
+        (0, 0, 0, 0)
+    )
+
+    for layer_name in layer_order:
+        character_image = Image.alpha_composite(
+            character_image,
+            layers[layer_name]
+        )
+
+    scene.alpha_composite(character_image, (x, y))
+
+
+print("Creating animated cartoon frames...")
+
+for frame_number in range(total_frames):
+    current_time = frame_number / FPS
+
+    # Change background across the video
+    scene_index = min(
+        int((current_time / duration) * 3),
+        2
+    )
+
+    scene = backgrounds[scene_index].copy()
+
+    speaker = active_speaker(current_time)
+
+    draw_character(
+        scene,
+        "Bobby",
+        current_time,
+        speaker == "Bobby"
+    )
+
+    draw_character(
+        scene,
+        "Sunny",
+        current_time,
+        speaker == "Sunny"
+    )
+
+    frame_path = f"video/frames/frame_{frame_number:05d}.jpg"
+
+    scene.convert("RGB").save(
+        frame_path,
+        quality=90
+    )
+
+print("Frames created. Building final video...")
+
+# Create silent video from frames
+run_command([
+    "ffmpeg", "-y",
+    "-framerate", str(FPS),
+    "-i", "video/frames/frame_%05d.jpg",
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
+    "-preset", "ultrafast",
+    "video/silent.mp4"
+])
+
+# Add Hindi audio and subtitles
+run_command([
+    "ffmpeg", "-y",
+    "-i", "video/silent.mp4",
+    "-i", "audio/joke.mp3",
+    "-vf",
+    "subtitles=audio/subtitles.srt:"
+    "force_style='FontSize=18,Outline=2,Shadow=1,"
+    "Alignment=2,MarginV=100'",
+    "-map", "0:v:0",
+    "-map", "1:a:0",
+    "-c:v", "libx264",
+    "-preset", "ultrafast",
+    "-c:a", "aac",
+    "-b:a", "128k",
+    "-shortest",
+    "-pix_fmt", "yuv420p",
+    "video/first_cartoon.mp4"
+])
+
+print("SUCCESS! Animated Hindi cartoon video created.")
