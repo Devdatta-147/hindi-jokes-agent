@@ -275,6 +275,49 @@ for frame_number in range(total_frames):
         frame_path,
         quality=90
     )
+    
+def apply_camera(scene, time, line):
+    if line is None:
+        return scene
+
+    speaker = line["speaker"]
+    elapsed = max(0, time - line["start"])
+    line_duration = max(0.1, line["end"] - line["start"])
+    progress = min(1.0, elapsed / line_duration)
+
+    # Brief reaction shot at the beginning of dialogue
+    if elapsed < 0.35:
+        focus = "Sunny" if speaker == "Bobby" else "Bobby"
+        zoom = 1.12
+    else:
+        focus = speaker
+
+        # Smooth zoom towards the punchline
+        zoom = 1.0 + 0.12 * math.sin(math.pi * progress)
+
+    center_x = positions[focus][0] + CHARACTER_WIDTH // 2
+    center_y = positions[focus][1] + CHARACTER_HEIGHT // 2
+
+    crop_width = int(WIDTH / zoom)
+    crop_height = int(HEIGHT / zoom)
+
+    left = max(0, min(WIDTH - crop_width,
+                      center_x - crop_width // 2))
+    top = max(0, min(HEIGHT - crop_height,
+                     center_y - crop_height // 2))
+
+    cropped = scene.crop((
+        left,
+        top,
+        left + crop_width,
+        top + crop_height
+    ))
+
+    return cropped.resize(
+        (WIDTH, HEIGHT),
+        Image.Resampling.LANCZOS
+    )
+
 
 print("Frames created. Building final video...")
 
