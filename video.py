@@ -193,7 +193,6 @@ def active_word(time, character_name):
 def draw_character(scene, name, time, speaker):
     layers = scaled_characters[name]
 
-    # Is this character the current dialogue speaker?
     speaking = speaker == name
 
     # Different movement personalities
@@ -236,11 +235,10 @@ def draw_character(scene, name, time, speaker):
         line_duration = max(0.1, line["end"] - line["start"])
         progress = min(1.0, elapsed / line_duration)
 
-    # Find this character's active spoken word
+    # Find this character's active word
     word = active_word(time, name) if word_timings else None
 
-    # If word timings exist, use them.
-    # Otherwise, retain the previous line-level animation.
+    # Word-level speaking detection
     if word_timings:
         word_speaking = word is not None
     else:
@@ -249,87 +247,92 @@ def draw_character(scene, name, time, speaker):
     # Natural blinking
     blink = ((time + phase) % 3.8) < 0.13
 
-    # Listener reaction
+    # Listener reaction at the beginning of a dialogue line
     reaction = (
         not speaking
         and line is not None
         and elapsed < 0.55
     )
 
-    # Default expressions
     eyes = "eyes_normal"
-    mouth = "mouth_smile"
+    mouth = "mouth_closed"
 
     if reaction:
         if name == "Bobby":
-           eyes = "eyes_surprised"
+            eyes = "eyes_surprised"
         else:
-           eyes = "eyes_narrow"
+            eyes = "eyes_narrow"
 
+        # Listener mouth stays closed
         mouth = "mouth_closed"
-    
-    elif speaking:
 
-        if name == "Bobby":
-            # Bobby: energetic and playful
-            if 0.25 < progress < 0.42:
-                eyes = "eyes_surprised"
-            elif 0.55 < progress < 0.72:
-                eyes = "eyes_narrow"
+    elif speaking and word_speaking:
 
-            if word_speaking:
-                if word_timings:
-                    word_start = word["start"]
-                    word_phase = time - word_start
+        # Word-timed mouth movement
+        if word_timings and word is not None:
+            word_start = word["start"]
+            word_end = word["end"]
 
-                    if int(word_phase * 8) % 2 == 0:
-                        mouth = "mouth_open"
-                    else:
-                        mouth = "mouth_closed"
-                else:
-                    if progress > 0.78:
-                        mouth = "mouth_laugh"
-                    elif int(time * 7) % 2 == 0:
-                        mouth = "mouth_open"
-                    else:
-                        mouth = "mouth_closed"
+            word_duration = max(
+                0.05,
+                word_end - word_start
+            )
+
+            word_phase = (
+                time - word_start
+            ) / word_duration
+
+            # Character-specific mouth speed
+            if name == "Bobby":
+                mouth_speed = 10
+                open_ratio = 0.58
+            else:
+                mouth_speed = 7
+                open_ratio = 0.48
+
+            # Open and close during the active word
+            cycle = (word_phase * mouth_speed) % 1.0
+
+            if cycle < open_ratio:
+                mouth = "mouth_open"
             else:
                 mouth = "mouth_closed"
 
         else:
-            # Sunny: calm and sarcastic
+            # Fallback if word timings are unavailable
+            if name == "Bobby":
+                mouth = (
+                    "mouth_open"
+                    if int(time * 8) % 2 == 0
+                    else "mouth_closed"
+                )
+            else:
+                mouth = (
+                    "mouth_open"
+                    if int(time * 6) % 2 == 0
+                    else "mouth_closed"
+                )
+
+        # Character expressions
+        if name == "Bobby":
+            if 0.25 < progress < 0.42:
+                eyes = "eyes_surprised"
+            elif 0.55 < progress < 0.72:
+                eyes = "eyes_narrow"
+        else:
             if 0.20 < progress < 0.68:
                 eyes = "eyes_narrow"
             elif 0.72 < progress < 0.88:
                 eyes = "eyes_worried"
 
-            if word_speaking:
-                if word_timings:
-                    word_start = word["start"]
-                    word_phase = time - word_start
-
-                    if int(word_phase * 6) % 2 == 0:
-                        mouth = "mouth_open"
-                    else:
-                        mouth = "mouth_closed"
-                else:
-                    if progress > 0.82:
-                        mouth = "mouth_smile"
-                    elif int(time * 5) % 2 == 0:
-                        mouth = "mouth_open"
-                    else:
-                        mouth = "mouth_closed"
-            else:
-                mouth = "mouth_closed"
-
     else:
         # Listening expressions
         if name == "Sunny":
             eyes = "eyes_narrow"
-            mouth = "mouth_smile"
         else:
             eyes = "eyes_normal"
-            mouth = "mouth_smile"
+
+        mouth = "mouth_smile"
 
     # Blinking overrides eye expression
     if blink:
@@ -378,6 +381,7 @@ def apply_camera(scene, time, line):
         return scene
 
     elapsed = max(0, time - line["start"])
+
     line_duration = max(
         0.1,
         line["end"] - line["start"]
@@ -385,7 +389,7 @@ def apply_camera(scene, time, line):
 
     progress = min(1.0, elapsed / line_duration)
 
-    # Briefly show the listener's reaction
+    # Briefly show listener reaction
     if elapsed < 0.35:
         focus = "Sunny" if speaker == "Bobby" else "Bobby"
         zoom = 1.10
