@@ -1,3 +1,4 @@
 
 Pillow
 gTTS
+edge-tts
