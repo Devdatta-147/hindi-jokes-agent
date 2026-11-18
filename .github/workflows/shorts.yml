@@ -63,6 +63,7 @@ jobs:
             video/
             scenes/
             characters/
+            audio/
           retention-days: 7
 
       - name: Save generated jokes
