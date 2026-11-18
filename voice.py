@@ -4,7 +4,6 @@ import json
 import os
 import glob
 import subprocess
-from datetime import datetime
 import edge_tts
 
 os.makedirs("audio/temp", exist_ok=True)
@@ -73,17 +72,18 @@ def format_srt_time(seconds):
 
 async def main():
 
-    # Check available Hindi voices
+    # Get available Hindi voices
     available = await edge_tts.list_voices()
     voice_names = {v["ShortName"] for v in available}
 
-    # Prefer different male voices if available
+    # Bobby voice candidates
     bobby_candidates = [
         "hi-IN-AaravNeural",
         "hi-IN-ArjunNeural",
         "hi-IN-MadhurNeural"
     ]
 
+    # Sunny voice candidates
     sunny_candidates = [
         "hi-IN-KunalNeural",
         "hi-IN-RehaanNeural",
@@ -110,6 +110,7 @@ async def main():
     audio_files = []
     current_time = 0.0
 
+    # Generate each dialogue line
     for index, line in enumerate(dialogue):
 
         speaker = line.get("speaker", "Bobby")
@@ -182,14 +183,109 @@ async def main():
         check=True
     )
 
+    # Save subtitles
     with open("audio/subtitles.srt", "w", encoding="utf-8") as f:
         f.write("\n".join(subtitle_entries))
 
+    # Save original line-level timings
     with open("audio/dialogue_timing.json", "w", encoding="utf-8") as f:
         json.dump(timings, f, ensure_ascii=False, indent=2)
 
+    # ---------------------------------------------
+    # WHISPERX WORD-LEVEL ALIGNMENT
+    # ---------------------------------------------
+    print("Starting WhisperX Hindi word alignment...")
+
+    word_timings = []
+
+    try:
+        import whisperx
+
+        device = "cpu"
+
+        # Load Hindi alignment model
+        align_model, metadata = whisperx.load_align_model(
+            language_code="hi",
+            device=device
+        )
+
+        # Load the combined audio
+        audio = whisperx.load_audio("audio/joke.mp3")
+
+        # Prepare dialogue segments for alignment
+        alignment_segments = [
+            {
+                "start": item["start"],
+                "end": item["end"],
+                "text": item["text"]
+            }
+            for item in timings
+        ]
+
+        # Align spoken Hindi words
+        aligned_result = whisperx.align(
+            alignment_segments,
+            align_model,
+            metadata,
+            audio,
+            device,
+            return_char_alignments=False
+        )
+
+        # Extract word timestamps
+        for segment in aligned_result.get("segments", []):
+            speaker = None
+
+            # Identify the speaker using the original line timings
+            midpoint = (
+                segment.get("start", 0) +
+                segment.get("end", 0)
+            ) / 2
+
+            for line in timings:
+                if line["start"] <= midpoint <= line["end"]:
+                    speaker = line["speaker"]
+                    break
+
+            for word in segment.get("words", []):
+                if "start" not in word or "end" not in word:
+                    continue
+
+                word_timings.append({
+                    "speaker": speaker,
+                    "word": word.get("word", "").strip(),
+                    "start": round(word["start"], 3),
+                    "end": round(word["end"], 3)
+                })
+
+        # Save word-level timings
+        with open("audio/word_timing.json", "w", encoding="utf-8") as f:
+            json.dump(
+                word_timings,
+                f,
+                ensure_ascii=False,
+                indent=2
+            )
+
+        print(
+            f"WhisperX alignment successful: "
+            f"{len(word_timings)} words aligned."
+        )
+
+    except Exception as e:
+
+        print("WARNING: WhisperX alignment failed.")
+        print("Reason:", str(e))
+
+        # Save an empty word timing file so the workflow can continue
+        with open("audio/word_timing.json", "w", encoding="utf-8") as f:
+            json.dump([], f, ensure_ascii=False, indent=2)
+
+        print("Using existing line-level timings as fallback.")
+
     print("Neural Hindi voices generated successfully!")
     print("Subtitles and dialogue timings saved.")
+    print("Word-level timing file: audio/word_timing.json")
 
 
 asyncio.run(main())
