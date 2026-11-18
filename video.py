@@ -38,14 +38,19 @@ def load_character(name):
 
     required = [
         "body.png",
-        "head.png",
+        "head_normal.png",
         "hair.png",
-        "eyes_open.png",
+        "eyes_normal.png",
         "eyes_closed.png",
+        "eyes_surprised.png",
+        "eyes_narrow.png",
+        "eyes_angry.png",
+        "eyes_worried.png",
         "mouth_closed.png",
         "mouth_open.png",
         "mouth_smile.png",
         "mouth_surprise.png",
+        "mouth_laugh.png",
         "arms_down.png",
         "arms_up.png"
     ]
@@ -81,8 +86,11 @@ for number in range(1, 4):
         raise FileNotFoundError(f"Missing background: {path}")
 
     backgrounds.append(
-        Image.open(path).convert("RGBA").resize((WIDTH, HEIGHT))
+        Image.open(path).convert("RGBA").resize(
+            (WIDTH, HEIGHT)
+        )
     )
+
 
 with open("audio/dialogue_timing.json", "r", encoding="utf-8") as f:
     dialogue = json.load(f)
@@ -93,7 +101,6 @@ if not dialogue:
 duration = get_audio_duration()
 total_frames = math.ceil(duration * FPS)
 
-# Resize character layers while keeping them transparent
 CHARACTER_WIDTH = 430
 CHARACTER_HEIGHT = 680
 
@@ -108,52 +115,110 @@ for name, layers in characters.items():
             Image.Resampling.LANCZOS
         )
 
-# Character positions on the screen
+
 positions = {
     "Bobby": (85, 850),
     "Sunny": (565, 850)
 }
 
 
-def active_speaker(time):
+def active_line(time):
     for line in dialogue:
         if line["start"] <= time <= line["end"]:
-            return line["speaker"]
+            return line
 
     return None
 
 
-def draw_character(scene, name, time, speaking):
+def draw_character(scene, name, time, speaker):
     layers = scaled_characters[name]
 
+    speaking = speaker == name
+    listening = speaker is not None and not speaking
+
     # Gentle body movement
-    bob = int(5 * math.sin(time * 3 + (0 if name == "Bobby" else 1)))
+    phase = 0 if name == "Bobby" else 1.5
+    bob = int(6 * math.sin(time * 3 + phase))
 
     x, y = positions[name]
     y += bob
 
-    # Blink briefly at regular intervals
+    # Natural head tilt
+    tilt_phase = (time + phase) % 7
+
+    if tilt_phase < 2:
+        head_angle = -3
+    elif tilt_phase < 4:
+        head_angle = 3
+    else:
+        head_angle = 0
+
+    head = layers["head_normal"].rotate(
+        head_angle,
+        resample=Image.Resampling.BICUBIC,
+        center=(215, 170)
+    )
+
+    hair = layers["hair"].rotate(
+        head_angle,
+        resample=Image.Resampling.BICUBIC,
+        center=(215, 170)
+    )
+
+    # Natural blinking
     blink = (time % 3.7) < 0.14
 
-    if speaking:
-        # Mouth opens and closes while this character speaks
-        mouth_is_open = (int(time * 7) % 2 == 0)
-        mouth = "mouth_open" if mouth_is_open else "mouth_closed"
+    # Facial expressions
+    reaction = False
+
+    for line in dialogue:
+        if line["start"] <= time <= line["end"]:
+            if line["speaker"] != name:
+                reaction = (time - line["start"]) < 0.45
+            break
+
+    if blink:
+        eyes = "eyes_closed"
+
+    elif reaction:
+        eyes = "eyes_surprised"
+
+    elif speaking and (time % 8) > 6.5:
+        eyes = "eyes_surprised"
+
+    elif speaking and (time % 11) > 8.5:
+        eyes = "eyes_narrow"
+
+    else:
+        eyes = "eyes_normal"
+
+    # Mouth animation
+    if reaction:
+        mouth = "mouth_surprise"
+
+    elif speaking:
+        mouth_phase = (int(time * 7) % 2 == 0)
+
+        if (time % 9) > 7.5:
+            mouth = "mouth_laugh"
+        else:
+            mouth = "mouth_open" if mouth_phase else "mouth_closed"
+
     else:
         mouth = "mouth_smile"
 
-    # Occasional hand gesture while speaking
-    gesture = speaking and (int(time * 1.5) % 3 == 0)
+    # Hand gestures
+    gesture = speaking and ((time + phase) % 4.5 < 1.0)
     arms = "arms_up" if gesture else "arms_down"
 
-    # Compose transparent layers in order
+    # Compose transparent layers
     layer_order = [
-        "body",
-        arms,
-        "head",
-        "hair",
-        "eyes_closed" if blink else "eyes_open",
-        mouth
+        layers["body"],
+        layers[arms],
+        head,
+        hair,
+        layers[eyes],
+        layers[mouth]
     ]
 
     character_image = Image.new(
@@ -162,10 +227,10 @@ def draw_character(scene, name, time, speaking):
         (0, 0, 0, 0)
     )
 
-    for layer_name in layer_order:
+    for layer in layer_order:
         character_image = Image.alpha_composite(
             character_image,
-            layers[layer_name]
+            layer
         )
 
     scene.alpha_composite(character_image, (x, y))
@@ -173,10 +238,13 @@ def draw_character(scene, name, time, speaking):
 
 print("Creating animated cartoon frames...")
 
+# Remove old frames so they don't enter the new video
+for old_frame in glob.glob("video/frames/frame_*.jpg"):
+    os.remove(old_frame)
+
 for frame_number in range(total_frames):
     current_time = frame_number / FPS
 
-    # Change background across the video
     scene_index = min(
         int((current_time / duration) * 3),
         2
@@ -184,20 +252,21 @@ for frame_number in range(total_frames):
 
     scene = backgrounds[scene_index].copy()
 
-    speaker = active_speaker(current_time)
+    line = active_line(current_time)
+    speaker = line["speaker"] if line else None
 
     draw_character(
         scene,
         "Bobby",
         current_time,
-        speaker == "Bobby"
+        speaker
     )
 
     draw_character(
         scene,
         "Sunny",
         current_time,
-        speaker == "Sunny"
+        speaker
     )
 
     frame_path = f"video/frames/frame_{frame_number:05d}.jpg"
@@ -209,7 +278,6 @@ for frame_number in range(total_frames):
 
 print("Frames created. Building final video...")
 
-# Create silent video from frames
 run_command([
     "ffmpeg", "-y",
     "-framerate", str(FPS),
@@ -220,7 +288,7 @@ run_command([
     "video/silent.mp4"
 ])
 
-# Add Hindi audio and subtitles
+# Add Hindi audio and preserve approved subtitle settings
 run_command([
     "ffmpeg", "-y",
     "-i", "video/silent.mp4",
