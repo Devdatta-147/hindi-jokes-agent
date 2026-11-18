@@ -35,6 +35,10 @@ jobs:
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
+      - name: Test WhisperX installation
+        run: |
+          python -c "import whisperx; print('WhisperX installed successfully')"
+
       - name: Generate Hindi joke
         run: python agent.py
 
