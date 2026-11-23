@@ -392,6 +392,12 @@ def draw_character(scene, name, time, speaker):
             if progress > 0.55:
                 arm_pose = "hips"
 
+    # Both characters briefly react when the mobile notification appears.
+    if notification_active_at(time):
+        eyes = "eyes_surprised"
+        mouth = "mouth_surprise"
+        arm_pose = "up"
+
     # Use the requested pose if available
     requested_layer = f"arms_{arm_pose}"
 
@@ -428,82 +434,178 @@ def draw_character(scene, name, time, speaker):
 
 
 
+def notification_active_at(time):
+    """True during the brief on-screen notification reaction."""
+    cycle = time % 12.0
+    return 1.0 <= cycle <= 2.1
+
+
 def draw_animated_props(scene, time, speaker):
     """
-    Draw simple animated props directly with Pillow.
-    No external PNG assets are required.
+    Version 2 prop interactions, drawn with Pillow.
+    No external image assets are required.
     """
-    # --- Bobby's tea cup: gently lifts while Bobby is speaking ---
+
+    # --- Bobby: pick up the tea cup, sip, then put it down ---
+    sip_cycle = time % 8.0
+
+    # Rest -> lift -> sip/tilt -> lower -> rest.
+    if sip_cycle < 3.0:
+        lift_progress = 0.0
+    elif sip_cycle < 3.8:
+        lift_progress = (sip_cycle - 3.0) / 0.8
+    elif sip_cycle < 5.0:
+        lift_progress = 1.0
+    elif sip_cycle < 5.9:
+        lift_progress = 1.0 - ((sip_cycle - 5.0) / 0.9)
+    else:
+        lift_progress = 0.0
+
+    # Smooth the movement so the cup does not jump between positions.
+    lift_progress = max(0.0, min(1.0, lift_progress))
+    lift_progress = lift_progress * lift_progress * (3 - 2 * lift_progress)
+
+    rest_x, rest_y = 345, 1250
+    sip_x, sip_y = 260, 1035
+    cup_x = int(rest_x + (sip_x - rest_x) * lift_progress)
+    cup_y = int(rest_y + (sip_y - rest_y) * lift_progress)
+
     cup_layer = Image.new("RGBA", (180, 150), (0, 0, 0, 0))
     cup_draw = ImageDraw.Draw(cup_layer)
 
-    cup_lift = 10 if speaker == "Bobby" and math.sin(time * 5) > 0 else 0
-    cup_draw.ellipse((28, 112, 145, 137), fill=(80, 48, 31, 90))
+    cup_draw.ellipse((28, 112, 145, 137), fill=(80, 48, 31, 75))
     cup_draw.rounded_rectangle(
         (42, 55, 125, 120), radius=12,
-        fill=(248, 244, 232, 255), outline=(75, 55, 43, 255), width=4
+        fill=(248, 244, 232, 255),
+        outline=(75, 55, 43, 255), width=4
     )
-    cup_draw.arc((108, 67, 158, 112), start=265, end=95,
-                 fill=(75, 55, 43, 255), width=7)
-    cup_draw.ellipse((49, 49, 119, 68),
-                     fill=(111, 65, 39, 255), outline=(75, 55, 43, 255), width=3)
-    cup_draw.arc((61, 12, 85, 48), start=210, end=330,
-                 fill=(220, 220, 220, 220), width=3)
-    cup_draw.arc((86, 4, 111, 43), start=210, end=330,
-                 fill=(220, 220, 220, 220), width=3)
+    cup_draw.arc(
+        (108, 67, 158, 112), start=265, end=95,
+        fill=(75, 55, 43, 255), width=7
+    )
+    cup_draw.ellipse(
+        (49, 49, 119, 68), fill=(111, 65, 39, 255),
+        outline=(75, 55, 43, 255), width=3
+    )
 
-    cup_angle = -5 if speaker == "Bobby" else 0
-    cup_layer = cup_layer.rotate(cup_angle, resample=Image.Resampling.BICUBIC,
-                                 expand=False)
-    scene.alpha_composite(cup_layer, (345, 1260 - cup_lift))
+    # Steam is visible while the cup is resting.
+    if lift_progress < 0.15:
+        steam_alpha = 190
+        cup_draw.arc(
+            (61, 12, 85, 48), start=210, end=330,
+            fill=(220, 220, 220, steam_alpha), width=3
+        )
+        cup_draw.arc(
+            (86, 4, 111, 43), start=210, end=330,
+            fill=(220, 220, 220, steam_alpha), width=3
+        )
 
-    # --- Sunny's newspaper: small rocking/page movement ---
+    cup_angle = -18 * lift_progress if sip_cycle < 5.0 else -5 * lift_progress
+    cup_layer = cup_layer.rotate(
+        cup_angle, resample=Image.Resampling.BICUBIC, expand=False
+    )
+    scene.alpha_composite(cup_layer, (cup_x, cup_y))
+
+    # --- Sunny: hold the newspaper and turn the right-hand page ---
     paper_layer = Image.new("RGBA", (260, 190), (0, 0, 0, 0))
     paper_draw = ImageDraw.Draw(paper_layer)
+
+    # Newspaper outline and left page.
     paper_draw.rounded_rectangle(
         (10, 10, 250, 180), radius=5,
-        fill=(247, 242, 222, 255), outline=(55, 55, 50, 255), width=4
+        fill=(247, 242, 222, 255),
+        outline=(55, 55, 50, 255), width=4
     )
     paper_draw.line((130, 18, 130, 171), fill=(130, 120, 100, 255), width=3)
     paper_draw.rectangle((24, 23, 116, 48), fill=(55, 55, 50, 255))
-    paper_draw.rectangle((145, 23, 235, 43), fill=(90, 85, 75, 255))
     for y_line in (62, 78, 94, 110, 126, 142, 158):
-        paper_draw.line((25, y_line, 116, y_line),
-                        fill=(125, 119, 105, 255), width=3)
-        paper_draw.line((145, y_line, 235, y_line),
-                        fill=(125, 119, 105, 255), width=3)
+        paper_draw.line(
+            (25, y_line, 116, y_line),
+            fill=(125, 119, 105, 255), width=3
+        )
 
-    page_shift = int(4 * math.sin(time * 2.2))
-    paper_angle = 3 * math.sin(time * 1.8)
-    paper_layer = paper_layer.rotate(paper_angle, resample=Image.Resampling.BICUBIC,
-                                     expand=False)
-    scene.alpha_composite(paper_layer, (625, 1230 + page_shift))
+    # A page-turn cycle: the right page narrows at the fold, then appears
+    # on the left side before returning to the open-newspaper position.
+    turn_cycle = time % 7.0
+    turn_progress = 0.0
+    if 4.0 <= turn_cycle <= 5.2:
+        turn_progress = (turn_cycle - 4.0) / 1.2
+    turn_progress = max(0.0, min(1.0, turn_progress))
 
-    # --- Mobile notification: slides in periodically and vibrates briefly ---
-    cycle = time % 9.0
-    if 1.0 <= cycle <= 4.0:
-        # Smoothly slide the notification card into view, then hold it.
-        slide = min(1.0, (cycle - 1.0) / 0.45)
-        x = int(1080 + 20 - 360 * slide)
-        vibration = int(3 * math.sin(time * 38)) if cycle < 1.8 else 0
+    # Cosine gives a page that swings from right to left around the centre fold.
+    page_width = int(105 * math.cos(math.pi * turn_progress))
+    page_side = 1 if page_width >= 0 else -1
+    visible_width = abs(page_width)
+
+    if visible_width > 2:
+        hinge_x = 130
+        outer_x = hinge_x + page_side * visible_width
+        page_points = [
+            (hinge_x, 18),
+            (outer_x, 25),
+            (outer_x, 164),
+            (hinge_x, 171)
+        ]
+        paper_draw.polygon(
+            page_points,
+            fill=(255, 251, 235, 255),
+            outline=(110, 100, 85, 255)
+        )
+        # Printed lines on the moving page.
+        for y_line in (42, 60, 78, 96, 114, 132, 150):
+            paper_draw.line(
+                (hinge_x + page_side * 8, y_line,
+                 hinge_x + page_side * max(8, visible_width - 8), y_line),
+                fill=(145, 137, 120, 255), width=2
+            )
+
+    paper_angle = 2 * math.sin(time * 1.2)
+    paper_layer = paper_layer.rotate(
+        paper_angle, resample=Image.Resampling.BICUBIC, expand=False
+    )
+    scene.alpha_composite(paper_layer, (625, 1230))
+
+    # --- Mobile: notification slides in, vibrates, then slides away ---
+    notification_cycle = time % 12.0
+    if 0.8 <= notification_cycle <= 3.5:
+        if notification_cycle < 1.25:
+            slide_progress = (notification_cycle - 0.8) / 0.45
+        elif notification_cycle < 2.6:
+            slide_progress = 1.0
+        else:
+            slide_progress = 1.0 - ((notification_cycle - 2.6) / 0.9)
+
+        slide_progress = max(0.0, min(1.0, slide_progress))
+        slide_progress = slide_progress * slide_progress * (3 - 2 * slide_progress)
+
+        x = int(1100 - 380 * slide_progress)
+        vibration = (
+            int(4 * math.sin(time * 48))
+            if 1.0 <= notification_cycle <= 1.8 else 0
+        )
 
         phone_layer = Image.new("RGBA", (350, 145), (0, 0, 0, 0))
         phone_draw = ImageDraw.Draw(phone_layer)
         phone_draw.rounded_rectangle(
             (4, 4, 344, 139), radius=22,
-            fill=(30, 34, 43, 238), outline=(235, 235, 235, 220), width=3
+            fill=(30, 34, 43, 238),
+            outline=(235, 235, 235, 220), width=3
         )
         phone_draw.ellipse((20, 23, 62, 65), fill=(80, 170, 125, 255))
         phone_draw.text((31, 31), "!", fill=(255, 255, 255, 255))
-        phone_draw.text((77, 19), "NEW MESSAGE",
-                        fill=(190, 220, 205, 255))
-        phone_draw.text((77, 49), "Bobby: Ha ha!",
-                        fill=(255, 255, 255, 255))
-        phone_draw.text((77, 83), "Just now",
-                        fill=(205, 205, 205, 255))
+        phone_draw.text(
+            (77, 19), "NEW MESSAGE",
+            fill=(190, 220, 205, 255)
+        )
+        phone_draw.text(
+            (77, 49), "Bobby: Ha ha!",
+            fill=(255, 255, 255, 255)
+        )
+        phone_draw.text(
+            (77, 83), "Just now",
+            fill=(205, 205, 205, 255)
+        )
         scene.alpha_composite(phone_layer, (x + vibration, 300))
-
-
 
 def apply_camera(scene, time, line):
     if line is None:
