@@ -23,60 +23,98 @@ def save_layer(image, folder, filename):
     image.save(os.path.join(folder, filename))
 
 
+
 def draw_body(folder, shirt):
     img = new_layer()
     d = ImageDraw.Draw(img)
 
-    # Legs
+    # Legs with subtle depth
     d.rounded_rectangle(
         (215, 610, 280, 850),
-        radius=25, fill=PANTS
+        radius=28, fill="#252F46"
     )
     d.rounded_rectangle(
         (320, 610, 385, 850),
-        radius=25, fill=PANTS
+        radius=28, fill=PANTS
     )
+
+    # Trouser highlights
+    d.line((235, 650, 235, 810), fill="#46516A", width=5)
+    d.line((340, 650, 340, 810), fill="#46516A", width=5)
 
     # Shoes
     d.rounded_rectangle(
         (185, 825, 295, 885),
-        radius=25, fill=SHOE
+        radius=25, fill=SHOE,
+        outline="#171B25", width=5
     )
     d.rounded_rectangle(
         (305, 825, 415, 885),
-        radius=25, fill=SHOE
+        radius=25, fill=SHOE,
+        outline="#171B25", width=5
     )
+    d.line((205, 850, 275, 850), fill="#596071", width=5)
+    d.line((325, 850, 395, 850), fill="#596071", width=5)
 
-    # Shirt
+    # Shirt body
     d.rounded_rectangle(
         (145, 320, 455, 650),
         radius=65,
         fill=shirt,
         outline=DARK,
-        width=8
+        width=9
+    )
+
+    # Side shadows for a rounded 3D appearance
+    d.rounded_rectangle(
+        (145, 355, 180, 615),
+        radius=18, fill="#173E50"
+    )
+    d.rounded_rectangle(
+        (420, 355, 455, 615),
+        radius=18, fill="#173E50"
+    )
+
+    # Shirt highlight
+    d.rounded_rectangle(
+        (195, 345, 225, 590),
+        radius=14, fill="#FFFFFF"
+    )
+    d.rounded_rectangle(
+        (195, 345, 225, 590),
+        radius=14, fill=shirt
     )
 
     # Collar
     d.polygon(
-        [(245, 325), (300, 380), (355, 325)],
-        fill=WHITE,
+        [(235, 325), (300, 390), (365, 325)],
+        fill="#F7F3E9",
         outline=DARK
     )
+    d.line((300, 390, 300, 620), fill=DARK, width=5)
 
     # Buttons
-    for y in (420, 475, 530):
+    for y in (425, 480, 535):
         d.ellipse(
-            (294, y-7, 306, y+7),
-            fill=WHITE
+            (292, y-7, 308, y+7),
+            fill="#F5E6C8",
+            outline=DARK,
+            width=2
         )
 
-    # Shirt pocket
+    # Chest pocket
     d.rounded_rectangle(
-        (365, 420, 420, 485),
-        radius=8,
-        outline=WHITE,
+        (365, 420, 420, 490),
+        radius=9,
+        fill=shirt,
+        outline="#D9E5E8",
         width=4
     )
+    d.line((375, 430, 410, 430), fill="#D9E5E8", width=3)
+
+    # Sleeve seams
+    d.arc((135, 320, 250, 435), 0, 180, fill="#D9E5E8", width=4)
+    d.arc((350, 320, 465, 435), 0, 180, fill="#D9E5E8", width=4)
 
     save_layer(img, folder, "body.png")
 
