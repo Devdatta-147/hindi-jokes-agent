@@ -34,13 +34,32 @@ if ending:
 
 
 async def generate_audio(text, voice, rate, pitch, filename):
-    communicate = edge_tts.Communicate(
-        text=text,
-        voice=voice,
-        rate=rate,
-        pitch=pitch
+    import asyncio
+
+    last_error = None
+
+    for attempt in range(3):
+        try:
+            communicate = edge_tts.Communicate(
+                text=text,
+                voice=voice,
+                rate=rate,
+                pitch=pitch
+            )
+
+            await communicate.save(filename)
+            return
+
+        except Exception as e:
+            last_error = e
+            print(f"Audio attempt {attempt + 1} failed: {e}")
+
+            if attempt < 2:
+                await asyncio.sleep(3)
+
+    raise RuntimeError(
+        f"Could not generate audio after 3 attempts: {last_error}"
     )
-    await communicate.save(filename)
 
 
 def get_duration(filename):
