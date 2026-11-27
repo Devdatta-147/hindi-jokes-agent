@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 
 WIDTH = 1080
 HEIGHT = 1920
-FPS = 15
+FPS = 24
 
 CHARACTER_WIDTH = 430
 CHARACTER_HEIGHT = 680
