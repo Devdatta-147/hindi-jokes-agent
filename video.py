@@ -238,14 +238,11 @@ def draw_character(scene, name, time, speaker):
     y += int(idle_bob + reaction_nod - punchline_lean)
     x += int(body_sway)
 
-    # Gentle idle head movement, plus a visible nod from the listening character.
-    tilt_phase = (time + phase) % 7
-    if tilt_phase < 2:
-        head_angle = -3
-    elif tilt_phase < 4:
-        head_angle = 3
-    else:
-        head_angle = 0
+    # Smooth, natural head movement
+head_angle = (
+    2.5 * math.sin(time * 1.4 + phase)
+    + 1.2 * math.sin(time * 2.6 + phase)
+)
 
     if line is not None and not speaking:
         head_angle += 4.0 * math.sin(elapsed * 7.0) * math.exp(-elapsed * 1.0)
@@ -273,8 +270,9 @@ def draw_character(scene, name, time, speaker):
         word_speaking = speaking
 
     # Natural blinking
-    blink = ((time + phase) % 3.8) < 0.13
-
+    # Natural blinking with different timing for each character
+blink_cycle = (time + phase * 1.7) % 4.2
+blink = blink_cycle < 0.16
     # Listener reaction
     reaction = (
         not speaking
